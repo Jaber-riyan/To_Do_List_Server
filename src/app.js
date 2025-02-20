@@ -4,15 +4,21 @@ const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 app.use(express.json());
 app.use(morgan('dev'));
 app.use(cors({
     origin: [
-        'http://localhost:5173/',
-    ]
+        'http://localhost:5173',
+        'https://taskzenn.netlify.app'
+    ],
+    credentials: true
 }));
+
+app.use(cookieParser());
 
 // mongo db connection 
 const uri = `mongodb+srv://${process.env.USER_NAME}:${process.env.PASSWORD}@cluster0.4ayta.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -40,6 +46,43 @@ async function run() {
 
         // activity collection
         const activityCollection = database.collection('activity');
+
+
+        // middleware
+        // verify token middleware
+        const verifyToken = (req, res, next) => {
+            // console.log("Inside the verify token");
+            // console.log("received request:", req?.headers?.authorization);
+            if (!req?.headers?.authorization) {
+                return res.status(401).json({ message: "Unauthorized Access!" });
+            }
+
+            // get token from the headers 
+            const token = req?.headers?.authorization;
+            // console.log("Received Token", token);
+
+            jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+                if (err) {
+                    console.error('JWT Verification Error:', err.message);
+                    return res.status(401).json({ message: err.message });
+                }
+                // console.log('Decoded Token:', decoded);
+                req.user = decoded;
+                next();
+            })
+        }
+
+        // JWT token create and remove APIS
+        // JWT token create API 
+        app.post('/jwt/create', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '7h' });
+
+            // res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+            // res.setHeader("Access-Control-Allow-Credentials", "true");
+
+            res.send({ token })
+        })
 
         // users related APIS 
         // insert user API 
@@ -134,7 +177,7 @@ async function run() {
 
         // task related APIs
         // insert task API
-        app.post('/tasks', async (req, res) => {
+        app.post('/tasks', verifyToken, async (req, res) => {
             try {
                 const task = req.body;
                 const result = await taskCollection.insertOne(task);
@@ -154,7 +197,7 @@ async function run() {
         })
 
         // get all tasks API 
-        app.get('/tasks', async (req, res) => {
+        app.get('/tasks', verifyToken, async (req, res) => {
             const result = await taskCollection.find().toArray();
             res.json({
                 status: true,
@@ -162,8 +205,19 @@ async function run() {
             })
         })
 
+        // get one tasks API 
+        app.get('/tasks/:id', verifyToken, async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await taskCollection.findOne(query);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
         // update task API
-        app.patch('/tasks/:id', async (req, res) => {
+        app.patch('/tasks/:id', verifyToken, async (req, res) => {
             const body = req.body
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
@@ -171,7 +225,6 @@ async function run() {
                 $set: {
                     title: body?.title,
                     description: body?.description,
-                    category: body?.category
                 }
             }
             const result = await taskCollection.updateOne(query, updatedDoc);
@@ -182,7 +235,7 @@ async function run() {
         })
 
         // delete task API
-        app.delete('/tasks/:id', async (req, res) => {
+        app.delete('/tasks/:id', verifyToken, async (req, res) => {
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
             const result = await taskCollection.deleteOne(query);
@@ -192,10 +245,27 @@ async function run() {
             })
         })
 
+        // change category of task API
+        app.patch('/tasks-category/:id', verifyToken, async (req, res) => {
+            const id = req.params.id 
+            console.log(id);
+            const category = req.body.category
+            const query = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    category: category,
+                }
+            }
+            const result = await taskCollection.updateOne(query, updatedDoc);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
 
         // activity related APIs 
         // insert activity API 
-        app.post('/activity', async (req, res) => {
+        app.post('/activity', verifyToken, async (req, res) => {
             const activity = req.body;
             const result = await activityCollection.insertOne(activity);
             res.json({
@@ -205,7 +275,7 @@ async function run() {
         })
 
         // get all the activities API
-        app.get('/activity', async (req, res) => {
+        app.get('/activity', verifyToken, async (req, res) => {
             const result = await activityCollection.find().toArray();
             res.json({
                 status: true,
