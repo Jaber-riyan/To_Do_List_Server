@@ -3,7 +3,7 @@ require('dotenv').config()
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
 app.use(express.json());
@@ -30,12 +30,10 @@ async function run() {
         console.log("successfully connected to MongoDB!");
 
         // database 
-        const database = client.db('To Do SCIC');
+        const database = client.db('ToDoListSCIC');
 
         // users collection
         const userCollection = database.collection('users');
-
-
 
         // users related APIS 
         // insert user API 
@@ -121,6 +119,66 @@ async function run() {
             }
             console.log(updatedDoc);
             const result = await userCollection.updateOne(query, updatedDoc);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
+
+        // task related APIs
+        // insert task API
+        app.post('/tasks', async (req, res) => {
+            try {
+                const task = req.body;
+                const result = await taskCollection.insertOne(task);
+                res.json({
+                    status: true,
+                    message: 'Task added successfully',
+                    data: result
+                });
+            } catch (error) {
+                console.error('Error adding task:', error);
+                res.status(500).json({
+                    status: false,
+                    message: 'Failed to add task',
+                    error: error.message
+                });
+            }
+        })
+
+        // get all tasks API 
+        app.get('/tasks', async (req, res) => {
+            const result = await taskCollection.find().toArray();
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
+        // update task API
+        app.patch('/tasks/:id', async (req, res) => {
+            const body = req.body
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    task: body?.task,
+                    status: body?.status
+                }
+            }
+            const result = await taskCollection.updateOne(query, updatedDoc);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
+        // delete task API
+        app.delete('/tasks/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await taskCollection.deleteOne(query);
             res.json({
                 status: true,
                 data: result
