@@ -35,6 +35,12 @@ async function run() {
         // users collection
         const userCollection = database.collection('users');
 
+        // tasks collection 
+        const taskCollection = database.collection('tasks');
+
+        // activity collection
+        const activityCollection = database.collection('activity');
+
         // users related APIS 
         // insert user API 
         app.post('/users', async (req, res) => {
@@ -163,8 +169,9 @@ async function run() {
             const query = { _id: new ObjectId(id) }
             const updatedDoc = {
                 $set: {
-                    task: body?.task,
-                    status: body?.status
+                    title: body?.title,
+                    description: body?.description,
+                    category: body?.category
                 }
             }
             const result = await taskCollection.updateOne(query, updatedDoc);
@@ -179,6 +186,27 @@ async function run() {
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
             const result = await taskCollection.deleteOne(query);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
+
+        // activity related APIs 
+        // insert activity API 
+        app.post('/activity', async (req, res) => {
+            const activity = req.body;
+            const result = await activityCollection.insertOne(activity);
+            res.json({
+                status: true,
+                data: result
+            })
+        })
+
+        // get all the activities API
+        app.get('/activity', async (req, res) => {
+            const result = await activityCollection.find().toArray();
             res.json({
                 status: true,
                 data: result
